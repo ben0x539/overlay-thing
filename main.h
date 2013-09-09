@@ -17,6 +17,7 @@ struct app_state {
   int mumble_pipe_fd;
   int mumble_wait_fd;
   xcb_window_t window;
+  uint16_t mumble_active_x, mumble_active_y, mumble_active_w, mumble_active_h;
   uint16_t screen_res_width;
   uint16_t screen_res_height;
   struct OverlayMsg mumble_msg;

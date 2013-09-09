@@ -17,6 +17,7 @@
 #define UNIX_PATH_MAX (sizeof(((struct sockaddr_un*) 0)->sun_path))
 
 #include "mumble.h"
+#include "xcb.h"
 
 #define MUMBLE_PIPE_FILENAME ".MumbleOverlayPipe"
 
@@ -41,23 +42,6 @@ static int on_mumble_read(struct app_state* state, uint32_t events);
 
 static my_epoll_cb mumble_cb = &on_mumble_read;
 static my_epoll_cb mumble_wait_cb = &on_mumble_wait_read;
-
-static int inotify_init_watch_creates(const char* dir) {
-  int inotify;
-
-  if ((inotify = inotify_init()) == -1) {
-    perror("inotify_init");
-    return -1;
-  }
-
-  if (inotify_add_watch(inotify, dir, IN_CREATE) == -1) {
-    perror("inotify_add_watch");
-    close(inotify);
-    return -1;
-  }
-
-  return inotify;
-}
 
 int setup_mumble(struct app_state* state) {
   struct epoll_event event;
@@ -84,6 +68,10 @@ int setup_mumble(struct app_state* state) {
     }
 
     state->mumble_msg_read = 0;
+    state->mumble_active_x =
+      state->mumble_active_y =
+      state->mumble_active_w =
+      state->mumble_active_h = 0;
     return 0;
   } else {
     if (errno == ECONNREFUSED || errno == ENOENT) {
@@ -107,6 +95,23 @@ int setup_mumble(struct app_state* state) {
       return -1;
     }
   }
+}
+
+static int inotify_init_watch_creates(const char* dir) {
+  int inotify;
+
+  if ((inotify = inotify_init()) == -1) {
+    perror("inotify_init");
+    return -1;
+  }
+
+  if (inotify_add_watch(inotify, dir, IN_CREATE) == -1) {
+    perror("inotify_add_watch");
+    close(inotify);
+    return -1;
+  }
+
+  return inotify;
 }
 
 static int on_mumble_wait_read(struct app_state* state, uint32_t events) {
@@ -309,6 +314,11 @@ static int handle_mumble_msg(struct app_state* state) {
     case OVERLAY_MSGTYPE_BLIT:
       break;
     case OVERLAY_MSGTYPE_ACTIVE:
+      state->mumble_active_x = (uint16_t) state->mumble_msg.body.oma.x;
+      state->mumble_active_y = (uint16_t) state->mumble_msg.body.oma.y;
+      state->mumble_active_w = (uint16_t) state->mumble_msg.body.oma.w;
+      state->mumble_active_h = (uint16_t) state->mumble_msg.body.oma.h;
+      move_resize(state);
       break;
     case OVERLAY_MSGTYPE_PID:
       break;

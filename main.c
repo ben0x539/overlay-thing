@@ -33,12 +33,10 @@ int main(void) {
     return -1;
   }
 
-  /*
   if (setup_mumble(&state) == -1) {
     cleanup(&state);
     return -1;
   }
-  */
 
   for (;;) {
     struct epoll_event event;

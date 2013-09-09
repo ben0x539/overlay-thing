@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include <sys/epoll.h>
+#include <xcb/shape.h>
 
 #include "xcb.h"
 
@@ -14,12 +15,19 @@ int setup_xcb(struct app_state* state) {
   xcb_screen_t* screen;
   xcb_screen_iterator_t iter;
   uint32_t valmask;
-  uint32_t vals[1];
+  uint32_t vals[2];
   struct epoll_event event;
+  const xcb_query_extension_reply_t* ext_query;
 
   state->xcb = xcb_connect(NULL, &screen_no);
   if (!state->xcb) {
     fputs("Cannot open display\n", stderr);
+    return -1;
+  }
+
+  ext_query = xcb_get_extension_data(state->xcb, &xcb_shape_id);
+  if (!ext_query->present) {
+    fputs("xshape extension not present\n", stderr);
     return -1;
   }
 
@@ -37,8 +45,9 @@ int setup_xcb(struct app_state* state) {
   state->screen_res_width  = screen->width_in_pixels;
   state->screen_res_height = screen->height_in_pixels;
 
-  valmask = XCB_CW_EVENT_MASK;
-  vals[0] = XCB_EVENT_MASK_EXPOSURE;
+  valmask = XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
+  vals[0] = 1;
+  vals[1] = XCB_EVENT_MASK_EXPOSURE;
 
   state->window = xcb_generate_id(state->xcb);
   xcb_create_window(
@@ -46,16 +55,16 @@ int setup_xcb(struct app_state* state) {
       XCB_COPY_FROM_PARENT,
       state->window,
       screen->root,
-      (int16_t) (screen->width_in_pixels / 2 - 75),
+      (int16_t) (screen->width_in_pixels / 2 - 150),
       (int16_t) (screen->height_in_pixels / 2 - 75),
       150, 150,
-      10,
+      0,
       XCB_WINDOW_CLASS_INPUT_OUTPUT,
       screen->root_visual,
       valmask, vals);
 
-  xcb_map_window(state->xcb, state->window);
-  xcb_flush(state->xcb);
+  xcb_shape_rectangles(state->xcb, XCB_SHAPE_SO_SET, XCB_SHAPE_SK_INPUT,
+      XCB_CLIP_ORDERING_UNSORTED, state->window, 0, 0, 0, NULL);
 
   event.events = EPOLLIN | EPOLLRDHUP;
   event.data.ptr = &xcb_cb;
@@ -66,14 +75,6 @@ int setup_xcb(struct app_state* state) {
   }
 
   return 0;
-
-/*
-  ext_query = xcb_get_extension_data(c, &xcb_render_id);
-  if (!ext_query->present) {
-    fprintf(stderr, "no xrender\n");
-    return -1;
-  }
-  */
 }
 
 
@@ -82,6 +83,22 @@ void cleanup_xcb(struct app_state* state) {
     xcb_disconnect(state->xcb);
     state->xcb = NULL;
   }
+}
+
+void move_resize(struct app_state* state) {
+  uint32_t values[4];
+  values[0] = state->mumble_active_x;
+  values[1] = state->mumble_active_y;
+  values[2] = state->mumble_active_w;
+  values[3] = state->mumble_active_h;
+
+  xcb_configure_window(state->xcb, state->window,
+      XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y
+      | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
+      values);
+
+  xcb_map_window(state->xcb, state->window);
+  xcb_flush(state->xcb);
 }
 
 static int on_xcb_read(struct app_state* state, uint32_t events) {
