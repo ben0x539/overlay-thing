@@ -16,6 +16,7 @@ struct app_state {
   xcb_gcontext_t gc;
   xcb_colormap_t cm;
   int epoll_fd;
+  int sig_fd;
   int mumble_pipe_fd;
   int mumble_wait_fd;
   xcb_window_t window;
