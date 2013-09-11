@@ -105,13 +105,13 @@ int setup_xcb(struct app_state* state) {
 
 void cleanup_xcb(struct app_state* state) {
   if (state->xcb) {
-    xcb_disconnect(state->xcb);
     if (state->window != XCB_NONE)
       xcb_destroy_window(state->xcb, state->window);
     if (state->gc != XCB_NONE)
       xcb_free_gc(state->xcb, state->gc);
     if (state->cm != XCB_NONE)
       xcb_free_colormap(state->xcb, state->cm);
+    xcb_disconnect(state->xcb);
     state->xcb = NULL;
   }
 }
