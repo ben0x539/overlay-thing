@@ -1,11 +1,14 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include <sys/epoll.h>
 #include <xcb/shape.h>
 
 #include "xcb.h"
 
+static xcb_visualid_t get_rgba_visual(xcb_connection_t* c,
+                                      xcb_screen_t* screen);
 static int on_xcb_read(struct app_state* state, uint32_t events);
 
 static my_epoll_cb xcb_cb = &on_xcb_read;
@@ -15,10 +18,13 @@ int setup_xcb(struct app_state* state) {
   xcb_screen_t* screen;
   xcb_screen_iterator_t iter;
   uint32_t valmask;
-  uint32_t vals[2];
+  uint32_t vals[3];
+  xcb_visualid_t rgba_visual;
   struct epoll_event event;
   const xcb_query_extension_reply_t* ext_query;
+  xcb_colormap_t cm;
 
+  state->window = state->gc = XCB_NONE;
   state->xcb = xcb_connect(NULL, &screen_no);
   if (!state->xcb) {
     fputs("Cannot open display\n", stderr);
@@ -45,14 +51,21 @@ int setup_xcb(struct app_state* state) {
   state->screen_res_width  = screen->width_in_pixels;
   state->screen_res_height = screen->height_in_pixels;
 
-  valmask = XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
+  rgba_visual = get_rgba_visual(state->xcb, screen);
+
+  cm = xcb_generate_id(state->xcb);
+  xcb_create_colormap(state->xcb, XCB_COLORMAP_ALLOC_NONE,
+      cm, screen->root, rgba_visual);
+
+  valmask = XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
   vals[0] = 1;
   vals[1] = XCB_EVENT_MASK_EXPOSURE;
+  vals[2] = cm;
 
   state->window = xcb_generate_id(state->xcb);
   xcb_create_window(
       state->xcb,
-      XCB_COPY_FROM_PARENT,
+      32,
       state->window,
       screen->root,
       (int16_t) (screen->width_in_pixels / 2 - 150),
@@ -60,8 +73,11 @@ int setup_xcb(struct app_state* state) {
       150, 150,
       0,
       XCB_WINDOW_CLASS_INPUT_OUTPUT,
-      screen->root_visual,
+      rgba_visual,
       valmask, vals);
+
+  state->gc = xcb_generate_id(state->xcb);
+  xcb_create_gc(state->xcb, state->gc, state->window, 0, NULL);
 
   xcb_shape_rectangles(state->xcb, XCB_SHAPE_SO_SET, XCB_SHAPE_SK_INPUT,
       XCB_CLIP_ORDERING_UNSORTED, state->window, 0, 0, 0, NULL);
@@ -81,6 +97,10 @@ int setup_xcb(struct app_state* state) {
 void cleanup_xcb(struct app_state* state) {
   if (state->xcb) {
     xcb_disconnect(state->xcb);
+    if (state->window != XCB_NONE)
+      xcb_destroy_window(state->xcb, state->window);
+    if (state->gc != XCB_NONE)
+      xcb_free_gc(state->xcb, state->gc);
     state->xcb = NULL;
   }
 }
@@ -98,7 +118,92 @@ void move_resize(struct app_state* state) {
       values);
 
   xcb_map_window(state->xcb, state->window);
+
+  /*
+  if (!state->wrap_image
+      || state->wrap_image->width < state->mumble_active_w
+      || state->wrap_image->height < state->mumble_active_h) {
+    assert(state->mumble_shm_ptr != NULL);
+    if (state->wrap_image) {
+      xcb_image_destroy(state->wrap_image);
+    }
+    state->wrap_image = xcb_image_create(
+        state->mumble_active_w, state->mumble_active_h,
+        XCB_IMAGE_FORMAT_Z_PIXMAP,
+        0,
+        32,
+        32,
+        32,
+        XCB_IMAGE_ORDER_LSB_FIRST,
+        XCB_IMAGE_ORDER_LSB_FIRST,
+        NULL,
+        state->mumble_active_w * state->mumble_active_h *  4,
+        state->mumble_shm_ptr);
+    state->conv_image = xcb_image_native(state->xcb, state->wrap_image, 1);
+    if (state->conv_image == state->wrap_image) {
+      state->conv_image = NULL;
+    }
+  }
+  */
+}
+
+void blit(struct app_state* state) {
+  if (!state->mumble_shm_ptr || state->mumble_active_w * state->mumble_active_h == 0)
+    return;
+  xcb_put_image(state->xcb, XCB_IMAGE_FORMAT_Z_PIXMAP,
+      state->window, state->gc,
+      state->mumble_active_w, state->mumble_active_h,
+      0, 0, 0, 32,
+      (uint32_t) state->mumble_active_w * state->mumble_active_h * 4u,
+      state->mumble_shm_ptr);
   xcb_flush(state->xcb);
+}
+
+static xcb_visualid_t get_rgba_visual(xcb_connection_t* c,
+                                      xcb_screen_t* screen) {
+  xcb_depth_iterator_t depth_iter;
+  xcb_visualid_t visual_id;
+
+  visual_id = XCB_NONE;
+
+  printf("screen visual: %d\n", screen ->root_visual);
+  for (depth_iter = xcb_screen_allowed_depths_iterator(screen);
+       depth_iter.rem;
+       xcb_depth_next(&depth_iter)) {
+    xcb_depth_t* d = depth_iter.data;
+    xcb_visualtype_iterator_t visual_iter;
+    if (d->depth != 32)
+      continue;
+    for (visual_iter = xcb_depth_visuals_iterator(d);
+         visual_iter.rem;
+         xcb_visualtype_next(&visual_iter)) {
+      xcb_visualtype_t* v = visual_iter.data;
+      /*xcb_colormap_iterator_t colormap_iter;*/
+      printf("visual %d %d %d %d %06x,%06x,%06x\n",
+          (int) v->visual_id,
+          (int) v->_class,
+          (int) v->bits_per_rgb_value,
+          (int) v->colormap_entries,
+          (int) v->red_mask,
+          (int) v->green_mask,
+          (int) v->blue_mask);
+      if (v->red_mask != 0xff0000
+          || v->green_mask != 0x00ff00
+          || v->blue_mask != 0x0000ff)
+        continue;
+      /*if (visual_id == XCB_NONE)*/
+        visual_id = v->visual_id;
+      /*for (colormap_iter = xcb_colormap_iterator(v);
+           colormap_iter.rem;
+           xcb_colormap_iterator_next(&colormap_iter)) {
+        xcb_colormap_t* c = colormap_iter->data;
+        printf("%d\n", (int) *c);
+      }*/
+      /* printf("visual %d\n", v->visual_id); */
+      /* return v->visual_id; */
+    }
+  }
+  return visual_id;
 }
 
 static int on_xcb_read(struct app_state* state, uint32_t events) {
@@ -107,8 +212,19 @@ static int on_xcb_read(struct app_state* state, uint32_t events) {
   while ((event = xcb_poll_for_event(state->xcb))) {
     printf("XCB: %d\n", (int) event->response_type);
     switch (event->response_type & ~0x80) {
+    case 0: {
+      /* xcb_request_error_t* error = (xcb_request_error_t*) event;
+       printf("error: code=%d seq=%d bad=%d min=%d maj=%d\n",
+          (int) error->error_code,
+          (int) error->sequence,
+          (int) error->bad_value,
+          (int) error->minor_opcode,
+          (int) error->major_opcode); */
+      break;
+    }
     case XCB_EXPOSE: {
       /* xcb_expose_event_t* e = (xcb_expose_event_t*) event; */
+      break;
     }
     default:
       break;

@@ -13,6 +13,7 @@ struct app_state {
   size_t mumble_msg_read;
   void* mumble_shm_ptr;
   const char* home;
+  xcb_gcontext_t gc;
   int epoll_fd;
   int mumble_pipe_fd;
   int mumble_wait_fd;
