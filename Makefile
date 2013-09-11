@@ -1,4 +1,4 @@
-XCB_LIBS = xcb xcb-render xcb-shape
+XCB_LIBS = xcb xcb-shape
 
 all: overlay-thing
 

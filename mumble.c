@@ -312,6 +312,7 @@ static int handle_mumble_msg(struct app_state* state) {
       }
     }
     case OVERLAY_MSGTYPE_BLIT:
+      blit(state);
       break;
     case OVERLAY_MSGTYPE_ACTIVE:
       state->mumble_active_x = (uint16_t) state->mumble_msg.body.oma.x;
@@ -319,6 +320,7 @@ static int handle_mumble_msg(struct app_state* state) {
       state->mumble_active_w = (uint16_t) state->mumble_msg.body.oma.w;
       state->mumble_active_h = (uint16_t) state->mumble_msg.body.oma.h;
       move_resize(state);
+      blit(state);
       break;
     case OVERLAY_MSGTYPE_PID:
       break;
