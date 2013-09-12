@@ -118,17 +118,22 @@ void cleanup_xcb(struct app_state* state) {
 
 void move_resize(struct app_state* state) {
   uint32_t values[4];
-  values[0] = state->mumble_active_x;
-  values[1] = state->mumble_active_y;
-  values[2] = state->mumble_active_w;
-  values[3] = state->mumble_active_h;
+  if (state->mumble_active_w * state->mumble_active_h > 0) {
+    xcb_map_window(state->xcb, state->window);
 
-  xcb_map_window(state->xcb, state->window);
+    values[0] = state->mumble_active_x;
+    values[1] = state->mumble_active_y;
+    values[2] = state->mumble_active_w;
+    values[3] = state->mumble_active_h;
 
-  xcb_configure_window(state->xcb, state->window,
-      XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y
-      | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
-      values);
+    xcb_configure_window(state->xcb, state->window,
+        XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y
+        | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
+        values);
+  } else {
+    xcb_unmap_window(state->xcb, state->window);
+    xcb_flush(state->xcb);
+  }
 }
 
 void blit(struct app_state* state) {

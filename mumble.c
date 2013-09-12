@@ -352,6 +352,10 @@ void cleanup_mumble(struct app_state* state) {
 }
 
 static int reopen_mumble(struct app_state* state) {
+  state->mumble_active_w = state->mumble_active_h = 0;
+  if (state->xcb)
+    move_resize(state);
+
   cleanup_mumble(state);
   return setup_mumble(state);
 }
