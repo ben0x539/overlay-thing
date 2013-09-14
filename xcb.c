@@ -149,8 +149,6 @@ void blit(struct app_state* state) {
   size = (size_t) state->mumble_active_w * state->mumble_active_h * 4;
 
   buf = malloc(size);
-  for (y = 0; y < size / 4; ++y)
-    ((uint32_t*)buf)[y] = 0xffff0000;
   for (y = 0; y < state->mumble_active_h; ++y) {
     memcpy((uint32_t*) buf + y * state->mumble_active_w,
            (uint32_t*) ptr + y * state->screen_res_width,
