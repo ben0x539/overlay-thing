@@ -19,7 +19,7 @@
 #include "mumble.h"
 #include "xcb.h"
 
-#define MUMBLE_PIPE_FILENAME ".MumbleOverlayPipe"
+#define MUMBLE_PIPE_FILENAME "MumbleOverlayPipe"
 
 enum read_status {
   READ_DONE,

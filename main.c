@@ -24,9 +24,9 @@ int main(void) {
   state.sig_fd = state.mumble_pipe_fd = state.mumble_wait_fd = -1;
   state.mumble_shm_ptr = state.xcb = NULL;
 
-  state.home = getenv("HOME");
+  state.home = getenv("XDG_RUNTIME_DIR");
   if (!state.home) {
-    fputs("HOME not set, exiting", stderr);
+    fputs("XDG_RUNTIME_DIR not set, exiting", stderr);
     return -1;
   }
 
