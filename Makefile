@@ -3,7 +3,7 @@ XCB_LIBS = xcb xcb-shape
 all: overlay-thing
 
 overlay-thing: main.o mumble.o xcb.o
-	$(CC) $(LDFLAGS) $(CFLAGS) `pkg-config --libs $(XCB_LIBS)` -lrt -o overlay-thing main.o mumble.o xcb.o
+	$(CC) $(CFLAGS) -o overlay-thing main.o mumble.o xcb.o $(LDFLAGS) -lrt `pkg-config --libs $(XCB_LIBS)`
 
 main.o: main.c main.h xcb.h mumble.h overlay.h
 	$(CC) $(CFLAGS) -c main.c
